@@ -1,0 +1,339 @@
+[[action-cable]]
+= Action Cable
+
+Modern webpages are not just static. They often get updates from the server
+without interaction from the user. Your Twitter or GMail browser client
+will display new Tweets or E-Mails without you reloading the page. The
+server pushes the information. Action Cable provides the tools you need
+to use these mechanisms without diving deep into the technical aspects of
+websockets.
+
+The standard Rails scaffold example used to be the "Blog in 15 Minutes"
+screencast by https://twitter.com/dhh[@dhh]. Now there is a new standard
+example to show how easy Action Cable can be used: A chat application.
+I find that a bit too complex for the first step so we begin with a much
+lighter setup to get a feeling how Action Cable works.
+
+== Minimal Current Time Update Example
+
+This app will display the current time and updates the same time to
+all old visitors of the page which are still online. So the first user
+gets the current time until the next user opens the same page. At that
+time the second user gets the current time and the first user gets the
+new time in addition to the already existing one.
+
+We start with a fresh Rails application and a basic `page` controller
+which provides an `index` action:
+
+[subs=+quotes]
+----
+$ **rails new clock**
+  [...]
+$ **cd clock**
+$ **rails generate controller page index**
+  [...]
+$
+----
+
+To display the time we create a `@current_time` variable in the
+`index` action.
+
+[source,ruby]
+.app/controllers/page_controller.rb
+----
+class PageController < ApplicationController
+  def index
+    @current_time = Time.now
+  end
+end
+----
+
+The view displays that `@current_time` with this code:
+
+[source,erb]
+.app/views/page/index.html.erb
+----
+<div id="messages">
+  <p><%= @current_time %></p>
+</div>
+----
+
+Lastly we update the routes so that everything happens on
+the index page:
+
+[source,ruby]
+.config/routes.rb
+----
+Rails.application.routes.draw do
+  get 'page/index'
+  root 'page#index'
+end
+----
+
+Start the Rails server:
+
+[subs=+quotes]
+----
+$ **rails server**
+=> Booting Puma
+=> Rails 5.0.0 application starting in development on http://localhost:3000
+[...]
+----
+
+Now you can visit http://localhost:3000 with your browser and
+get the current time displayed. Reloading the page will result
+in an update on the same page.
+
+To use Action Cable we need to add some more code. Action Cable
+uses channels which can be subscribed be the web browser and which
+will be used to send updates to the page. So we need to create a
+`clock` channel which can be done with a
+generator:
+
+[subs=+quotes]
+----
+$ **rails generate channel clock**
+Running via Spring preloader in process 1844
+      create  app/channels/clock_channel.rb
+      create  app/assets/javascripts/channels/clock.coffee
+$
+----
+
+The JavaScript part of Action Cable has to be activated.
+The code is already there. You just have to remove the `#`s.
+
+[source,javascript]
+.app/assets/javascripts/cable.coffee
+----
+#= require action_cable
+#= require_self
+#= require_tree ./channels
+#
+@App ||= {}
+App.cable = ActionCable.createConsumer()
+----
+
+In the `page.coffee` file we add code to handle the subscription
+to the `ClockChannel` and which processes updates which
+are pushed by Action Cable. Those updates will be appended the
+the `<div>` with the `messages` id.
+
+[source,javascript]
+.app/assets/javascripts/page.coffee
+----
+App.room = App.cable.subscriptions.create "ClockChannel",
+  received: (data) ->
+    $('#messages').append data['message']
+----
+
+The `ClockChannel` need some basic configuration to work:
+
+[source,ruby]
+.app/channels/clock_channel.rb
+----
+class ClockChannel < ApplicationCable::Channel
+  def subscribed
+    stream_from "clock_channel"
+  end
+
+  def unsubscribed
+    # Any cleanup needed when channel is unsubscribed
+  end
+end
+----
+
+The update will get broadcast by the following code in the `show`
+action:
+
+[source,ruby]
+.app/controllers/page_controller.rb
+----
+class PageController < ApplicationController
+  def index
+    @current_time = Time.now.to_s
+
+    ActionCable.server.broadcast 'clock_channel', message: '<p>'+Time.now.to_s+'</p>'
+  end
+end
+----
+
+Lastly we have to mount a websocket server in the `routes.rb`:
+
+[source,ruby]
+.config/routes.rb
+----
+Rails.application.routes.draw do
+  get 'page/index'
+  root 'page#index'
+
+  mount ActionCable.server => '/cable'
+end
+----
+
+After restarting the Rails web server you can play with the
+application. Open a couple of browser windows and visit
+http://localhost:3000/
+
+You'll see the new time update in every open window below
+the former time updates.
+
+== The Chat Application
+
+Now it's time to tackle the chat application. I'm not going to
+walk you through that step by step but add some information.
+
+We create a new application with a `message` scaffold where
+the model stores the messages.
+
+[subs=+quotes]
+----
+$ **rails new chatroom**
+  [...]
+$ **cd chatroom**
+$ **rails generate controller page index**
+  [...]
+$ **rails generate scaffold message content**
+  [...]
+$ **rails db:migrate**
+  [...]
+$ **rails generate channel room speak**
+  [...]
+$ **rails generate job MessageBroadcast**
+----
+
+[source,ruby]
+.config/routes.rb
+----
+Rails.application.routes.draw do
+  get 'page/index'
+  root 'page#index'
+
+  mount ActionCable.server => '/cable'
+end
+----
+
+[source,erb]
+.app/views/page/index.html.erb
+----
+<h1>Chat</h1>
+
+<div id="messages">
+  <%= render @messages %>
+</div>
+
+<form>
+  <label>Say:</label><br>
+  <input type="text" data-behavior="room_speaker">
+</form>
+----
+
+[source,erb]
+.app/views/messages/_message.html.erb
+----
+<div class="message">
+  <p>
+    <b><%= l Time.now, format: :short %>:</b>
+    <%= message.content %>
+  </p>
+</div>
+----
+
+We display the last 5 messages on the index page:
+
+[source,ruby]
+.app/controllers/page_controller.rb
+----
+class PageController < ApplicationController
+  def index
+    @messages = Message.order(:created_at).
+                        reverse_order.
+                        limit(5).
+                        reverse
+  end
+end
+----
+
+[source,javascript]
+.app/assets/javascripts/cable.coffee
+----
+#= require action_cable
+#= require_self
+#= require_tree ./channels
+#
+@App ||= {}
+App.cable = ActionCable.createConsumer()
+----
+
+[source,ruby]
+.app/channels/room_channel.rb
+----
+class RoomChannel < ApplicationCable::Channel
+  def subscribed
+    stream_from "room_channel"
+  end
+
+  def unsubscribed
+  end
+
+  def speak(data)
+    Message.create! content: data['message']
+  end
+end
+----
+
+[source,javascript]
+.app/assets/javascripts/page.coffee
+----
+App.room = App.cable.subscriptions.create "RoomChannel",
+  connected: ->
+    # Called when the subscription is ready for use on the server
+
+  disconnected: ->
+    # Called when the subscription has been terminated by the server
+
+  received: (data) ->
+    $('#messages').append data['message']
+
+  speak: (message) ->
+    @perform 'speak', message: message
+
+$(document).on 'keypress', '[data-behavior~=room_speaker]', (event) ->
+  if event.keyCode is 13 # return = send
+    App.room.speak event.target.value
+    event.target.value = ""
+    event.preventDefault()
+----
+
+Using a job is more secure and performant than doing it
+in the controller. Active Job will take care of the work.
+
+[source,ruby]
+.app/jobs/message_broadcast_job.rb
+----
+class MessageBroadcastJob < ApplicationJob
+  queue_as :default
+
+  def perform(message)
+    ActionCable.server.broadcast 'room_channel', message: render_message(message)
+  end
+
+  private
+  def render_message(message)
+    ApplicationController.renderer.render(partial: 'messages/message', locals: { message: message })
+  end
+end
+----
+
+After a new `message` was created in the database the job will
+be triggered.
+
+[source,ruby]
+.app/models/message.rb
+----
+class Message < ApplicationRecord
+  after_create_commit { MessageBroadcastJob.perform_later self }
+end
+----
+
+Now open a couple of browsers at http://localhost:3000 and
+try this basic chat application.

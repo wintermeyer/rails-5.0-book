@@ -1,0 +1,19 @@
+[appendix]
+
+[[further-rails-documentation]]
+= Further Rails Documentation
+
+Here is a list of important websites on the topic Ruby on Rails:
+
+http://guides.rubyonrails.org::
+A couple of very good official guides.
+
+http://rubyonrails.org/::
+The project page of Ruby on Rails offers many links for further
+documentation. Please note: some parts of the documentation are now
+obsolete. Please check if what you are reading is related specifically
+to Rails 3.2 or to older Rails versions.
+
+http://railscasts.com/::
+Ryan Bates used to publish a new screencast every Monday on a topic associated
+with Rails. Unfortunately he hasn't published screencasts for some time now but the page still has valuable old ones

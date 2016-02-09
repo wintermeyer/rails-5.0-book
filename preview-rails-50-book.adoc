@@ -1,0 +1,42 @@
+= Preview of Ruby on Rails 5.0 for Autodidacts
+Stefan Wintermeyer
+v5.0, 2016-02-07
+:doctype: book
+:producer: Stefan Wintermeyer
+:keywords: Ruby on Rails, Rails, Ruby, Framework, MVC
+:copyright: Stefan Wintermeyer
+:imagesdir: images
+:front-cover-image: image:cover.jpg[Front Cover,314,499]
+:icons: font
+:toc:
+:source-highlighter: pygments
+:pdf-page-size: A4
+ifndef::ebook-format[:leveloffset: 1]
+
+[[preface]]
+This webpage is a preview for my "Ruby on Rails 5.0 for Autodidacts"
+book. It contains some sample chapters of it.
+
+include::chapter-first-steps-with-rails.adoc[]
+
+include::chapter-activerecord.adoc[]
+
+include::chapter-scaffolding.adoc[]
+
+include::chapter-routing.adoc[]
+
+include::chapter-forms.adoc[]
+
+include::chapter-cookies-and-sessions.adoc[]
+
+include::chapter-active_job.adoc[]
+
+include::chapter-actionmailer.adoc[]
+
+include::chapter-asset-pipeline.adoc[]
+
+include::chapter-caching.adoc[]
+
+include::chapter-action-cable.adoc[]
+
+include::appendix-installing.adoc[]

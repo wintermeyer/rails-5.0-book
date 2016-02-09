@@ -1,0 +1,654 @@
+[[tests]]
+= Tests
+
+[[tdd-introduction]]
+== Introduction
+
+I have been programming for 35 years and most of the time I have managed
+quite well without test-driven development (TDD). I am not going to be
+mad at you if you decide to just skip this chapter. You can
+create Rails applications without tests and are not likely to get any
+bad karma as a result (at least, I hope not - but you can never be
+entirely sure with the whole karma thing).
+
+But if you should decide to go for TDD, then I can promise you that it
+is an enlightenment. The basic idea of TDD is that you write a test for
+each programming function to check this function. In the pure TDD
+teaching, this test is written before the actual programming. Yes, you
+will have a lot more to do initially. But later, you can run all the
+tests and see that the application works exactly as you wanted it to.
+The read advantage only becomes apparent after a few weeks or months,
+when you look at the project again and write an extension or new
+variation. Then you can safely change the code and check it still works
+properly by running the tests. This avoids a situation where you find
+yourself saying "oops, that went a bit wrong, I just didn’t think of
+this particular problem".
+
+Often, the advantage of TDD already becomes evident when writing a
+program. Tests can reveal many careless mistakes that you would
+otherwise only have stumbled across much later on.
+
+This chapter is a brief overview of the topic test-driven development
+with Rails. If you have tasted blood and want to find out more, you can
+dive into the official Rails documentation at
+http://guides.rubyonrails.org/testing.html.
+
+NOTE: TDD is just like driving a car. The only way to learn it is by doing it.
+
+[[example-for-a-user-in-a-web-shop]]
+== Example for a User in a Web Shop
+
+Let’s start with a user scaffold in an imaginary web shop:
+
+[subs=+quotes]
+----
+$ **rails new webshop**
+  [...]
+$ **cd webshop**
+$ **rails generate scaffold user login_name first_name last_name birthday:date**
+      [...]
+      invoke    test_unit
+      create      test/models/user_test.rb
+      create      test/fixtures/users.yml
+      [...]
+      invoke    test_unit
+      create      test/controllers/users_controller_test.rb
+      invoke    helper
+      create      app/helpers/users_helper.rb
+      invoke      test_unit
+      [...]
+$ **rails db:migrate**
+      [...]
+----
+
+You already know all about scaffolds (if not, please go and read the chapter
+xref:scaffolding-and-rest["Scaffolding and REST"] first)
+so you know what the application we have just created does. The scaffold
+created a few tests (they are easy to recognise because the word `test`
+is in the file name).
+
+The complete test suite of a Rails project is processed with the command
+`rails test`. Let’s have a go and see what a test produces at this stage
+of development:
+
+[subs=+quotes]
+----
+$ **rails test**
+Running via Spring preloader in process 48169
+Run options: --seed 30780
+
+# Running:
+
+.......
+
+Finished in 2.128604s, 3.2885 runs/s, 5.6375 assertions/s.
+
+7 runs, 12 assertions, 0 failures, 0 errors, 0 skips
+----
+
+The output `7 runs, 12 assertions, 0 failures, 0 errors, 0 skips` looks
+good. By default, a test will run correctly in a standard scaffold.
+
+Let’s now edit the `app/models/user.rb` and insert a few validations (if
+these are not entirely clear to you, please read the section
+xref:validation["Validation"]):
+
+[source,ruby]
+.app/models/user.rb
+----
+class User < ApplicationRecord
+  validates :login_name,
+            presence: true,
+            length: { minimum: 10 }
+
+  validates :last_name,
+            presence: true
+end
+----
+
+Then we execute `rails test` again:
+
+[subs=+quotes]
+----
+$ **rails test**
+Running via Spring preloader in process 48284
+Run options: --seed 61281
+
+# Running:
+
+"User.count" didn't change by 1.
+Expected: 3
+  Actual: 2
+
+bin/rails test test/controllers/users_controller_test.rb:19
+
+.....
+
+Finished in 0.305897s, 22.8835 runs/s, 32.6908 assertions/s.
+
+7 runs, 10 assertions, 1 failures, 0 errors, 0 skips
+----
+
+Boom! This time we have `1 failures`. The error happens in the
+`should create user` and the `should update user`. The
+explanation for this is in our validation. The example data created by
+the scaffold generator went through in the first `rails test` (without
+validation). The errors only occurred the second time (with validation).
+
+This example data is created as _fixtures_tests tests
+in YAML format in the directory `test/fixtures/`. Let’s have a look at
+the example data for `User` in the file `test/fixtures/users.yml`:
+
+[source,yaml]
+.test/fixtures/users.yml
+----
+one:
+  login_name: MyString
+  first_name: MyString
+  last_name: MyString
+  birthday: 2015-12-27
+
+two:
+  login_name: MyString
+  first_name: MyString
+  last_name: MyString
+  birthday: 2015-12-27
+----
+
+There are two example records there that do not fulfill the requirements
+of our validation. The `login_name` should have a length of at least 10.
+Let’s change the `login_name` in `test/fixtures/users.yml` accordingly:
+
+[source,yaml]
+.test/fixtures/users.yml
+----
+one:
+  login_name: MyString12
+  first_name: MyString
+  last_name: MyString
+  birthday: 2015-12-27
+
+two:
+  login_name: MyString12
+  first_name: MyString
+  last_name: MyString
+  birthday: 2015-12-27
+----
+
+Now, a `rails test` completes without any errors again:
+
+[subs=+quotes]
+----
+$ **rails test**
+Running via Spring preloader in process 48169
+Run options: --seed 3341
+
+# Running:
+
+.......
+
+Finished in 0.326051s, 21.4690 runs/s, 39.8711 assertions/s.
+
+7 runs, 12 assertions, 0 failures, 0 errors, 0 skips
+----
+
+Now we know that valid data has to be contained in the
+`test/fixtures/users.yml` so that the standard test created via scaffold
+will succeed. But nothing more. Next step is to change the
+`test/fixtures/users.yml` to a minimum (for example, we do not need a
+`first_name`):
+
+[source,yaml]
+.test/fixtures/users.yml
+----
+one:
+  login_name: MyString12
+  last_name: Mulder
+
+two:
+  login_name: MyString12
+  last_name: Scully
+----
+
+To be on the safe side, let’s do another `rake test` after making
+our changes (you really can’t do that often enough):
+
+[subs=+quotes]
+----
+$ **rails test**
+
+# Running:
+
+.......
+
+Finished in 0.336391s, 20.8091 runs/s, 38.6455 assertions/s.
+
+7 runs, 12 assertions, 0 failures, 0 errors, 0 skips
+----
+
+IMPORTANT: All fixtures are loaded into the database when a test is
+           started. You need to keep this in mind for your test,
+           especially if you use `uniqueness` in your validation.
+
+[[functional-tests]]
+=== Functional Tests
+
+Let’s take a closer look at the point where the original errors
+occurred:
+
+[subs=+quotes]
+----
+"User.count" didn't change by 1.
+Expected: 3
+  Actual: 2
+
+bin/rails test test/controllers/users_controller_test.rb:19
+----
+
+In the `UsersControllerTest` the User could not be created.
+The controller tests are located in the directory `test/functional/`.
+Let’s now take a good look at the file
+`test/controllers/users_controller_test.rb`
+
+[source,ruby]
+.test/controllers/users_controller_test.rb
+----
+require 'test_helper'
+
+class UsersControllerTest < ActionDispatch::IntegrationTest
+  setup do
+    @user = users(:one)
+  end
+
+  test "should get index" do
+    get users_url
+    assert_response :success
+  end
+
+  test "should get new" do
+    get new_user_url
+    assert_response :success
+  end
+
+  test "should create user" do
+    assert_difference('User.count') do
+      post users_url, params: { user: { birthday: @user.birthday, first_name: @user.first_name, last_name: @user.last_name, login_name: @user.login_name } }
+    end
+
+    assert_redirected_to user_path(User.last)
+  end
+
+  [...]
+end
+----
+
+At the beginning, we find a `setup` instruction:
+
+[source,ruby]
+----
+setup do
+  @user = users(:one)
+end
+----
+
+These three lines of code mean that for the start of each individual
+test, an instance `@user` with the data of the item `one` from the file
+`test/fixtures/users.yml` is created. `setup` is a predefined callback
+that - if present - is started by Rails before each test. The opposite
+of setup is `teardown`. A `teardown` - if present - is called automatically
+after each test.
+
+NOTE: For every test (in other words, at each run of `rails test`), a
+      fresh and therefore empty test database is created automatically. This
+      is a different database than the one that you access by default via
+      `rails console` (that is the development database). The databases are
+      defined in the configuration file `config/database.yml`. If you want to
+      do debugging, you can access the test database with
+      `rails console test`.
+
+This functional test then tests various web page functions. First,
+accessing the index page:
+
+[source,ruby]
+----
+test "should get index" do
+  get users_url
+  assert_response :success
+end
+----
+
+The command `get users_url` accesses the page `/users`.
+`assert_response :success` means that the page was delivered.
+
+Let’s look more closely at the `should create user` problem from earlier.
+
+[source,ruby]
+----
+test "should create user" do
+  assert_difference('User.count') do
+    post users_url, params: { user: { birthday: @user.birthday, first_name: @user.first_name, last_name: @user.last_name, login_name: @user.login_name } }
+  end
+
+  assert_redirected_to user_path(User.last)
+end
+----
+
+The block `assert_difference('User.count') do ... end` expects a change
+by the code contained within it. `User.count` after should result in +1.
+
+The last line `assert_redirected_to user_path(User.last)` checks if
+after the newly created record the redirection to the corresponding view
+`show` occurs.
+
+Without describing each individual functional test line by line, it's
+becoming clear what these tests do: they execute real queries to the Web
+interface (or actually to the controllers) and so they can be used for
+testing the controllers.
+
+[[unit-tests]]
+=== Unit Tests
+
+For testing the validations that we have entered in
+`app/models/user.rb`, units tests are more suitable. Unlike the
+functional tests, these test only the model, not the controller’s work.
+
+The unit tests are located in the directory `test/models/`. But a look
+into the file `test/models/user_test.rb` is rather sobering:
+
+[source,ruby]
+.test/models/user_test.rb
+----
+require 'test_helper'
+
+class UserTest < ActiveSupport::TestCase
+  # test "the truth" do
+  #   assert true
+  # end
+end
+----
+
+By default, scaffold only writes a commented-out dummy test.
+
+A unit test always consists of the following structure:
+
+[source,ruby]
+----
+test "an assertion" do
+  assert something_is_true_or_false
+end
+----
+
+The word `assert` already indicates that we are dealing with an
+assertion in this context. If this assertion is `true`, the test will
+complete and all is well. If this assertion is `false`, the test fails
+and we have an error in the program (you can specify the output of the
+error as string at the end of the assert line).
+
+If you have a look at http://guides.rubyonrails.org/testing.html[guides.rubyonrails.org/testing.html]
+you'll see that there are some other `assert` variations. Here
+are a few examples:
+
+* `assert( boolean, [msg] )`
+* `assert_equal( obj1, obj2, [msg] )`
+* `assert_not_equal( obj1, obj2, [msg] )`
+* `assert_same( obj1, obj2, [msg] )`
+* `assert_not_same( obj1, obj2, [msg] )`
+* `assert_nil( obj, [msg] )`
+* `assert_not_nil( obj, [msg] )`
+* `assert_match( regexp, string , [msg] )`
+* `assert_no_match( regexp, string , [msg] )`
+
+Let’s breathe some life into the first test in the
+`test/unit/user_test.rb`:
+
+[source,ruby]
+.test/unit/user_test.rb
+----
+require 'test_helper'
+
+class UserTest < ActiveSupport::TestCase
+  test 'a user with no attributes is not valid' do
+    user = User.new
+    assert_not user.save, 'Saved a user with no attributes.'
+  end
+end
+----
+
+This test checks if a newly created User that does not contain any data
+is valid (it shouldn't be).
+
+So a `rails test` then completes immediately:
+
+[subs=+quotes]
+----
+$ **rails test:units**
+Running via Spring preloader in process 48169
+Run options: --seed 43319
+
+# Running:
+
+.
+
+Finished in 0.043224s, 23.1353 runs/s, 23.1353 assertions/s.
+
+8 runs, 13 assertions, 0 failures, 0 errors, 0 skips
+----
+
+Now we integrate two asserts in a test to check if the two fixture
+entries in the `test/fixtures/users.yml` are really valid:
+
+[source,ruby]
+----
+require 'test_helper'
+
+class UserTest < ActiveSupport::TestCase
+  test 'an empty user is not valid' do
+    assert !User.new.valid?, 'Saved an empty user.'
+  end
+
+  test "the two fixture users are valid" do
+    assert User.new(last_name: users(:one).last_name, login_name:
+    users(:one).login_name ).valid?, 'First fixture is not valid.'
+    assert User.new(last_name: users(:two).last_name, login_name:
+    users(:two).login_name ).valid?, 'Second fixture is not valid.'
+  end
+end
+----
+
+Then once more a `rails test`:
+
+[subs=+quotes]
+----
+$ **rails test:units**
+Running via Spring preloader in process 48169
+Run options: --seed 11674
+
+# Running:
+
+.........
+
+Finished in 0.388814s, 23.1473 runs/s, 38.5789 assertions/s.
+
+9 runs, 15 assertions, 0 failures, 0 errors, 0 skips
+----
+
+[[fixtures]]
+== Fixtures
+
+With _fixtures_ you can generate example data for tests. The default
+format for this is YAML. The files for this can be found in the
+directory `test/fixtures/` and are automatically created with
+`rails generate scaffold`. But of course you can also define your own
+files. All fixtures are loaded anew into the test database by default
+with every test.
+
+Examples for alternative formats (e.g. CSV) can be found at
+http://api.rubyonrails.org/classes/ActiveRecord/Fixtures.html[api.rubyonrails.org/classes/ActiveRecord/Fixtures.html].
+
+[[static-fixtures]]
+=== Static Fixtures
+
+The simplest variant for fixtures is static data. The fixture for `User`
+used in xref:example-for-a-user-in-a-web-shop["Example for a
+User in a Web Shop"] statically looks as follows:
+
+[source,yaml]
+.test/fixtures/users.yml
+----
+one:
+  login_name: fox.mulder
+  last_name: Mulder
+
+two:
+  login_name: dana.scully
+  last_name: Scully
+----
+
+You simple write the data in YAML format into the corresponding file.
+
+[[fixtures-with-erb]]
+=== Fixtures with ERB
+
+Static YAML fixtures are sometimes too unintelligent. In these cases,
+you can work with ERB.
+
+If we want to dynamically enter today’s day 20 years ago for the
+birthdays, then we can simply do it with ERB in
+`test/fixtures/users.yml`
+
+[source,yaml]
+.test/fixtures/users.yml
+----
+one:
+  login_name: fox.mulder
+  last_name: Mulder
+  birthday: <%= 20.years.ago.to_s(:db) %>
+
+two:
+  login_name: dana.scully
+  last_name: Scully
+  birthday: <%= 20.years.ago.to_s(:db) %>
+----
+
+[[integration-tests]]
+== Integration Tests
+
+Integration tests are tests that work like functional tests but can go
+over several controllers and additionally analyze the content of a
+generated view. So you can use them to recreate complex workflows within
+the Rails application. As an example, we will write an integration test
+that tries to create a new user via the Web GUI, but omits the
+`login_name` and consequently gets corresponding flash error messages.
+
+A `rake generate scaffold` generates unit and functional tests, but not
+integration tests. You can either do this manually in the directory
+`test/integration/` or more comfortably with
+`rails generate integration_test`. So let’s create an integration test:
+
+[subs=+quotes]
+----
+$ **rails generate integration_test invalid_new_user_workflow**
+Running via Spring preloader in process 48532
+      invoke  test_unit
+      create    test/integration/invalid_new_user_workflow_test.rb
+----
+
+We now populate this file
+`test/integration/invalid_new_user_workflow_test.rb` with the following
+test:
+
+[source,ruby]
+.test/integration/invalid_new_user_workflow_test.rb
+----
+require 'test_helper'
+
+class InvalidNewUserWorkflowTest < ActionDispatch::IntegrationTest
+  fixtures :all
+
+  test 'try to create a new user without a login' do
+    @user = users(:one)
+
+    get '/users/new'
+    assert_response :success
+
+    post users_url, params: { user: { last_name: @user.last_name } }
+    assert_equal '/users', path
+    assert_select 'li', "Login name can't be blank"
+    assert_select 'li', "Login name is too short (minimum is 10 characters)"
+  end
+end
+----
+
+Let’s run all tests:
+
+[subs=+quotes]
+----
+$ **rails test**
+Running via Spring preloader in process 48169
+Run options: --seed 47618
+
+# Running:
+
+..........
+
+Finished in 0.278271s, 3.5936 runs/s, 14.3745 assertions/s.
+
+10 runs, 19 assertions, 0 failures, 0 errors, 0 skips
+----
+
+The example clearly shows that you can program much without manually
+using a web browser to try it out. Once you have written a test for the
+corresponding workflow, you can rely in future on the fact that it will
+run through and you don’t have to try it out manually in the browser as
+well.
+
+[[rake-stats]]
+== rails stats
+
+rails stats With `rails stats` you get an overview of your Rails project.
+For our example, it looks like this:
+
+[subs=+quotes]
+----
+$ **rails stats**
++----------------------+--------+--------+---------+---------+-----+-------+
+| Name                 |  Lines |   LOC  | Classes | Methods | M/C | LOC/M |
++----------------------+--------+--------+---------+---------+-----+-------+
+| Controllers          |     79 |     53 |       2 |       9 |   4 |     3 |
+| Helpers              |      4 |      4 |       0 |       0 |   0 |     0 |
+| Jobs                 |      2 |      2 |       1 |       0 |   0 |     0 |
+| Models               |     11 |     10 |       2 |       0 |   0 |     0 |
+| Mailers              |      4 |      4 |       1 |       0 |   0 |     0 |
+| Javascripts          |     30 |      0 |       0 |       0 |   0 |     0 |
+| Libraries            |      0 |      0 |       0 |       0 |   0 |     0 |
+| Tasks                |      0 |      0 |       0 |       0 |   0 |     0 |
+| Controller tests     |     48 |     38 |       1 |       7 |   7 |     3 |
+| Helper tests         |      0 |      0 |       0 |       0 |   0 |     0 |
+| Model tests          |     15 |     13 |       1 |       2 |   2 |     4 |
+| Mailer tests         |      0 |      0 |       0 |       0 |   0 |     0 |
+| Integration tests    |     17 |     13 |       1 |       1 |   1 |    11 |
++----------------------+--------+--------+---------+---------+-----+-------+
+| Total                |    210 |    137 |       9 |      19 |   2 |     5 |
++----------------------+--------+--------+---------+---------+-----+-------+
+  Code LOC: 73     Test LOC: 64     Code to Test Ratio: 1:0.9
+----
+
+In this project, we have a total of 73 LOC (Lines Of Code) in the
+controllers, helpers and models. Plus we have a total of 64 LOC for
+tests. This gives us a test relation of 1:1.0.9. Logically, this does
+not say anything about the quality of tests.
+
+[[more-on-testing]]
+== More on Testing
+
+The most important link on the topic testing is surely the URL
+http://guides.rubyonrails.org/testing.html. There you will also find
+several good examples on this topic.
+
+No other topic is the subject of much discussion in the Rails community
+as the topic testing. There are very many alternative test tools. One
+very popular one is RSpec (see http://rspec.info/). I am deliberately
+not going to discuss these alternatives here, because this book is
+mainly about helping you understand Rails, not the thousands of extra
+tools with which you can build your personal Rails development
+environment.

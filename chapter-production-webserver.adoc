@@ -1,0 +1,482 @@
+[[web-server-in-production-mode]]
+= Web Server in Production Mode
+
+[[production-webserver-introduction]]
+== Introduction
+
+Until now we were working with the development system. Let’s have
+another close look at the output of that development system:
+
+[subs=+quotes]
+----
+$ **rails server**
+=> Booting Puma
+=> Rails 5.0.0.1 application starting in development on http://localhost:3000
+=> Run `rails server -h` for more startup options
+=> Ctrl-C to shutdown server
+I, [2016-01-29T19:02:46.800508 #8703]  INFO -- : Celluloid 0.17.3 is running in BACKPORTED mode. [ http://git.io/vJf3J ]
+Puma 2.16.0 starting...
+* Min threads: 0, max threads: 16
+* Environment: development
+* Listening on tcp://localhost:3000
+----
+
+The second line tells us that we are in "development" mode and that
+the application can be accessed at the URL http://localhost:3000. The
+web server used here is https://github.com/puma/puma[Puma].
+That's a simple HTTP web server.
+
+For a production system, you would normally use a standard web server
+such as Apache, lighttpd or Nginx, to serve as reverse proxy and load
+balancer for the Rails system. The Rails system is then not run by the
+Puma, but by more powerful solutions such as Unicorn
+(http://unicorn.bogomips.org/), Mongrel
+(http://en.wikipedia.org/wiki/Mongrel_(web_server)), Thin
+(http://code.macournoyer.com/thin/) or Puma (http://puma.io/).
+
+This chapter walks you through the setup process of a production server
+which runs Nginx as a reverse proxy webserver and unicorn as the Ruby on
+Rails webserver behind the Nginx. We start with a fresh Debian system
+and install all the software we need. The Rails project will be run with
+Ruby 2.2.1 which gets installed with RVM and runs for the user deployer.
+Feel free to customize the directorystructure once everything is up and
+running.
+
+The example Rails application we use is called `blog`.
+
+WARNING: If you have never set up a Nginx or Apache web server by
+         yourself before you will get lost somewhere in this chapter.
+
+[[debian-8.3]]
+== Debian 8.3
+
+We build our production web server on a minimal Debian 8.3 system. To
+carry out this installation, you need to have root rights on the web
+server!
+
+This description assumes that you have a freshly installed Debian
+GNU/Linux 8.3 (Jessie). You will find an ISO image for the installation
+at http://www.debian.org. I recommend the approximately 250 MB net
+installation CD image. For instructions on how to install
+Debian-GNU/Linux, please go to http://www.debian.org/distrib/netinst.
+
+TIP: http://www.vmware.com/[VMware] or any other virtual PC system
+     is a great playground to get a feeling how this works.
+
+[[buildsystem]]
+=== Buildsystem
+
+First, we install a few Debian packages we are going to need.
+
+[subs=+quotes]
+----
+root@debian:~# **apt-get -y install gawk libgdbm-dev pkg-config libffi-dev build-essential openssl libreadline6 libreadline6-dev curl git-core zlib1g zlib1g-dev libssl-dev libyaml-dev libsqlite3-dev sqlite3 libxml2-dev libxslt-dev autoconf libc6-dev ncurses-dev automake libtool bison npm subversion python**
+[...]
+root@debian:~#
+----
+
+[[nginx]]
+=== nginx
+
+Nginx will be our web server to the outside world.
+
+[subs=+quotes]
+----
+root@debian:~# **apt-get -y install nginx**
+[...]
+root@debian:~#
+----
+
+[[user-deployer]]
+=== User Deployer
+
+Our Rails project is going use https://rvm.io[RVM] in the user space.
+So we create a new user with the name `deployer`:
+
+[subs=+quotes]
+----
+root@debian:~# **adduser deployer**
+Adding user `deployer' ...
+Adding new group `deployer' (1001) ...
+Adding new user `deployer' (1001) with group `deployer' ...
+Creating home directory `/home/deployer' ...
+Copying files from `/etc/skel' ...
+Enter new UNIX password:
+Retype new UNIX password:
+passwd: password updated successfully
+Changing the user information for deployer
+Enter the new value, or press ENTER for the default
+  Full Name []: **Deployer**
+  Room Number []:
+  Work Phone []:
+  Home Phone []:
+  Other []:
+Is the information correct? [Y/n] **Y**
+root@debian:~#
+----
+
+[[database]]
+=== Database
+
+In this setup we use http://www.postgresql.org/[PostgreSQL] as our
+production database.
+
+[[mysql-installation]]
+==== PostgreSQL Installation
+
+We need to install the database software:
+
+[subs=+quotes]
+----
+root@debian:~# **apt-get -y install postgresql postgresql-client libpq-dev**
+----
+
+To create a database user `deployer` and a database `blog` we need to do the following steps:
+
+[subs=+quotes]
+----
+root@debian:~# **su - postgres**
+postgres@debian:~$ **psql**
+psql (9.4.5)
+Type "help" for help.
+
+postgres=# **CREATE USER deployer WITH PASSWORD '123456';**
+CREATE ROLE
+postgres=# **CREATE DATABASE blog_production OWNER deployer;**
+CREATE DATABASE
+postgres=# **\q**
+postgres@debian:~$ **exit**
+logout
+root@debian:~#
+----
+
+WARNING: Do not use the password _123456_ in your application! It's just
+         an example for this book.
+
+[[setting-up-rails-environment-for-user-deployer]]
+==== Setting up Rails Environment for User Deployer
+
+With `su - deployer` we’ll become the user deployer:
+
+[subs=+quotes]
+----
+root@debian:~# **su - deployer**
+----
+
+As user `deployer`, please carry out the steps for installing Ruby 2.3
+and Rails 5.0 via RVM.
+
+[subs=+quotes]
+----
+$ **gpg --keyserver hkp://keys.gnupg.net --recv-keys 409B6B1796C275462A1703113804BB82D39DC0E3**
+[...]
+$ **curl -L https://get.rvm.io | bash**
+[...]
+$ **source /home/deployer/.rvm/scripts/rvm**
+[...]
+$ **rvm install 2.3.0 --autolibs=read-only**
+[...]
+$ gem install rails
+[...]
+----
+
+TIP: You need to run `gem install rails --pre` in case Rails 5.0 is still
+     beta while you read this text.
+
+=== Environment Variables
+
+For security reasons it is not a good idea to store database passwords
+and the secret key base in your Rails code repository. Usually the best
+way is to store those values in environment variables.
+
+So set those you need to add the following to lines to the `.bash_profile`
+file of the user `deployer`. After that you'll have to source that file
+or to logout and login again as the user `deployer`
+
+[source,config]
+./home/deployer/.bash_profile
+----
+export BLOG_DATABASE_PASSWORD=123456
+export SECRET_KEY_BASE=AASDFASDFASDFASDFASFDASDFASDF
+----
+
+WARNING: The secret key base should be longer than the example one here.
+        Please have a look into the file `config/secrets.yml` for
+        more information.
+
+After adding those environment variables you have to logout and login as
+the user `deployer` or source the `/home/deployer/.bash_profile` file.
+
+[[setting-up-a-new-rails-project]]
+== Setting Up a New Rails Project
+
+To keep this guide as simple as possible, we create a simple blog in the
+home directory of the user `deployer`.
+
+[subs=+quotes]
+----
+$ **rails new blog --database=postgresql**
+[...]
+$ **cd blog**
+deployer@debian:~/blog$ **rails generate scaffold post subject content:text**
+[...]
+deployer@debian:~/blog$
+----
+
+NOTE: `--database=postgresql` takes care of installing the `pg` gem for
+      using PostgreSQL. In case you already have a Rails application you
+      need to add the line `gem 'pg'` to your Gemfile and run
+      a `bundle install` afterwards.
+
+[[production-database-configuration]]
+=== Production Database Configuration
+
+In the file `config/database.yml` you need to username of the
+produciton database user to `deployer`:
+
+[source,yaml]
+.config/database.yml
+----
+[...]
+
+production:
+  <<: *default
+  database: blog_production
+  username: deployer
+  password: <%= ENV['BLOG_DATABASE_PASSWORD'] %>
+----
+
+[[rake-dbmigration]]
+=== rails db:migration
+
+We still need to create the production database `blog` table:
+
+[subs=+quotes]
+----
+deployer@debian:~/blog$ **rails db:migrate RAILS_ENV=production**
+[...]
+deployer@debian:~/blog$
+----
+
+IMPORTANT: Please ensure that the `rails db:migrate` concludes with a
+           `RAILS_ENV=production`. This is to migrate the production database.
+
+[[rake-assetsprecompile]]
+=== rails assets:precompile
+
+`rails assets:precompile` ensures that all assets in the asset pipeline
+are made available for the production environment.
+
+[subs=+quotes]
+----
+deployer@debian:~/blog$ **rails assets:precompile**
+[...]
+deployer@debian:~/blog$
+----
+
+=== Puma Configuration
+
+The Puma project offers an example configuration file at
+https://github.com/puma/puma/blob/master/examples/config.rb
+
+Following you'll find an example version which works fine.
+
+TIP: Use the command `grep -c processor /proc/cpuinfo` to get
+     the number of CPU cores in system. That number is the
+     maximum you can set as `workers` in the puma configuration.
+
+[source.rb]
+.config/puma.rb
+----
+workers 1
+threads 1, 6
+
+app_dir = File.expand_path("../..", __FILE__)
+shared_dir = "#{app_dir}/shared"
+
+rails_env = ENV['RAILS_ENV'] || "production"
+environment rails_env
+
+bind "unix://#{shared_dir}/sockets/puma.sock"
+
+stdout_redirect "#{shared_dir}/log/puma.stdout.log", "#{shared_dir}/log/puma.stderr.log", true
+
+pidfile "#{shared_dir}/pids/puma.pid"
+state_path "#{shared_dir}/pids/puma.state"
+activate_control_app
+
+on_worker_boot do
+  require "active_record"
+  ActiveRecord::Base.connection.disconnect! rescue ActiveRecord::ConnectionNotEstablished
+  ActiveRecord::Base.establish_connection(YAML.load_file("#{app_dir}/config/database.yml")[rails_env])
+end
+----
+
+[[puma-init-script]]
+=== Puma Init Script
+
+The Puma web server has to be started automatically at every booting
+process. Plus it has to be killed when the server shuts down. That's
+been taken care of by an init script.
+
+----
+$ **cd /etc/init.d**
+$ **wget https://raw.githubusercontent.com/puma/puma/master/tools/jungle/init.d/puma**
+$ **chmod a+x puma**
+$ **touch /etc/puma.conf**
+$ **update-rc.d -f puma defaults**
+$ **/etc/init.d/puma add /home/deployer/blog deployer /home/deployer/blog/config/puma.rb /home/deployer/blog/log/puma.log**
+[....] Added a Puma to the jungle: /home/deployer/blog,deployer,/home/deployer/blog/config/puma.rb,/home/deployer/blog/log/puma.log. You still have to start it though.:
+$ /etc/init.d/puma start
+[ ok ] Starting puma (via systemctl): puma.service.
+$
+----
+
+[[nginx-configuration]]
+=== nginx Configuration
+
+For the Rails project, we add a new configuration file
+`/etc/nginx/sites-available/blog.conf` with the following content:
+
+[source,config]
+./etc/nginx/sites-available/blog.conf
+----
+upstream unicorn {
+  server unix:/tmp/.unicorn_blog.sock fail_timeout=0;
+}
+
+server {
+  listen 80 default deferred;
+  # server_name example.com;
+  root /home/deployer/blog/public;
+
+  location / {
+    gzip_static on;
+  }
+
+  location ^~ /assets/ {
+    gzip_static on;
+    expires max;
+    add_header Cache-Control public;
+  }
+
+  try_files $uri/index.html $uri @unicorn;
+  location @unicorn {
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header Host $http_host;
+    proxy_redirect off;
+    proxy_pass http://unicorn;
+  }
+
+  error_page 500 502 503 504 /500.html;
+  client_max_body_size 4G;
+  keepalive_timeout 10;
+}
+----
+
+We link this configuration file into the /etc/nginx/sites-enabled
+directory to have it loaded by Nginx. The default file can be deleted.
+After that we restart Nginx and are all set. You can access the Rails
+application through the IP address of this server.
+
+[subs=+quotes]
+----
+$ **ln -s /etc/nginx/sites-available/blog.conf /etc/nginx/sites-enabled/**
+$ **rm /etc/nginx/sites-enabled/default**
+$ **/etc/init.d/nginx restart**
+[ ok ] Restarting nginx (via systemctl): nginx.service.
+$
+----
+
+[[loading-updated-versions-of-the-rails-project]]
+=== Loading Updated Versions of the Rails Project
+
+If you want to activate Updates to the Rails project, you need to copy
+them into the directory `/home/deployer/blog` and log in as user
+`deployer` to run `rails assets:precompile` (see
+xref:asset-pipeline["Asset Pipeline"]).
+
+[subs=+quotes]
+----
+deployer@debian:~/blog$ **rails assets:precompile**
+[...]
+deployer@debian:~/blog$
+----
+
+If you bring in new migrations, you of course also need to do a
+`rails db:migrate RAILS_ENV=production`:
+
+[subs=+quotes]
+----
+deployer@debian:~/blog$ **rails db:migrate RAILS_ENV=production**
+[...]
+deployer@debian:~/blog$
+----
+
+Then you need to restart Unicorn as user `root`:
+
+[subs=+quotes]
+----
+root@debian:~# **/etc/init.d/unicorn_blog restart**
+Starting unicorn...
+root@debian:~#
+----
+
+[[misc]]
+== Misc
+
+[[alternative-setups]]
+=== Alternative Setups
+
+The RVM, unicorn and Nginx way is fast and makes it possible to setup
+different Ruby versions on one server. But many admins prefer an easier
+installation process which is promised by Phusion Passenger. Have a look
+at https://www.phusionpassenger.com for more information about
+Passenger. It is a very good and reliable solution.
+
+[[what-else-there-is-to-do]]
+=== What Else There Is To Do
+
+Please always consider the following points - every admin has to decide
+these for him- or herself and implement them accordingly:
+
+* Automatic and regular backup of database and Rails project.
+* Set up log rotations of log files.
+* Set up monitoring for system load and hard drive space.
+* Regularly install Debian security updates as soon as they become
+available.
+
+[[and-co.]]
+=== 404 and Co.
+
+Finally, please look into the `public` directory in your Rails project
+and adapt the HTML pages saved there to your own requirements.
+Primarily, this is about the design of the pages. In the default
+setting, these are somewhat sparse and do not have any relation to the
+rest of your website. If you decide to update your web page and shut
+down your Unicorn server to do so, nginx will deliver the web page
+`public/500.html` in the meantime.
+
+You will find a list of HTTP error codes at
+http://en.wikipedia.org/wiki/List_of_HTTP_status_codes
+
+[[multiple-rails-servers-on-one-system]]
+=== Multiple Rails Servers on One System
+
+You can runs several Rails servers on one system without any problems.
+You need to set up a separate Unicorn for each Rails server. You can
+then distribute to it from nginx. With nginx you can also define on
+which IP address a Rails server is accessible from the outside.
+
+[[cloud-platform-as-service-provider]]
+== Cloud Platform as Service Provider
+
+If you do not have a web server available on the internet or want to
+deploy to a PaaS (Platform as a Service) system right from the start,
+you should have a look at what the various providers have to offer. The
+two US market leaders are currently Heroku (http://www.heroku.com/) and
+Engine Yard (http://www.engineyard.com/).
+
+PaaS as platform usually offers less options than your own server. But
+you have 7x24 support for this platform if anything does not work
+properly.

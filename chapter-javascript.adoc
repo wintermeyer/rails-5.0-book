@@ -1,0 +1,215 @@
+[[javascript]]
+= JavaScript
+
+The focus of this chapter is not on explaining JavaScript. The aim is to
+show you as a Rails programmer how you can integrate JavaScript in a
+Rails application. Correspondingly, the chapters do not explain
+JavaScript in detail. I am assuming that you can read and understand
+JavaScript. If not, it may be better to skip this chapter. You can
+happily get by without JavaScript.
+
+[[jquery]]
+== jQuery
+
+By default, Rails 5 uses the jQuery Javascript library
+(http://jquery.com/). If you do not require this library, you should
+delete the following lines from the file
+`app/assets/javascripts/application.js` within the asset pipeline
+(see the section xref:asset-pipeline["Asset Pipeline"]):
+
+[source,javascript]
+----
+//= require jquery
+//= require jquery_ujs
+----
+
+With jQuery, you can implement animations and Ajax interactions on your
+web page relatively easily.
+
+You will find a good introduction to this topic in the jQuery
+documentation at http://learn.jquery.com/
+
+[[coffeescript]]
+== CoffeeScript
+
+For many Rails developers, CoffeeScript is the best thing invented since
+the introduction of sliced bread. CoffeeScript is a simple programming
+language that is converted to JavaScript via the asset pipeline. I am
+going to use JavaScript and CoffeeScript in this chapter. If you would
+like to know more about CoffeeScript, please look at the CoffeeScript
+documentation at http://coffeescript.org/ and as so often there is also
+an excellent Railscast on CoffeeScript available at
+http://railscasts.com/episodes/267-coffeescript-basics.
+
+[[javascript-helpers]]
+== JavaScript Helpers
+
+For using JavaScript in the view, there are some useful helpers
+available.
+
+[[javascript_tag]]
+=== javascript_tag
+
+The easiest way of using JavaScript one-liners in a view is via
+`javascript_tag`.
+
+With the following line in the view, you can execute an alert when the
+page is accessed:
+
+[source,erb]
+----
+<%= javascript_tag "alert('Just an example.')" %>
+----
+
+The HTML code generated is this:
+
+[source,html]
+----
+<script type="text/javascript">
+//<![CDATA[
+alert('Just an example.')
+//]]>
+</script>
+----
+
+[[link_to_function]]
+=== link_to_function
+
+The helper `link_to_function` creates a link whose `onclick` handler
+executes a JavaScript.
+
+Again, here is a example for an alert. The ERB code in the view looks
+like this:
+
+[source,erb]
+----
+<%= link_to_function "trigger alert", "alert('Just an example.')" %>
+----
+
+The generated HTML code:
+
+[source,html]
+----
+<a href="#" onclick="alert('Just an example.'); return false;">trigger
+alert</a>
+----
+
+[[button_to_function]]
+=== button_to_function
+
+The helper `button_to_function` creates a button whose `onclick` handler
+executes a JavaScript.
+
+Once more the example with the alert. The ERB code in the view looks
+like this:
+
+[source,erb]
+----
+<%= button_to_function "trigger alert", "alert('Just an example.')" %>
+----
+
+The generated HTML code:
+
+[source,html]
+----
+<input onclick="alert('Just an example.');" type="button" value="trigger
+alert" />
+----
+
+[[example]]
+== Example
+
+The easiest way of explaining how you go about programming with
+JavaScript and the asset pipeline in a Rails project is by using a
+little example. As always, the main focus is not on creating an
+amazingly meaningful application. ;-)
+
+[[changing-form-depending-on-input]]
+=== Changing Form Depending on Input
+
+Let’s build a room reservation system where you can book a single
+or double room and then have to enter either one or two guest
+names in the same form. The basic structure:
+
+[subs=+quotes]
+----
+$ **rails new hotel**
+  [...]
+$ **cd hotel**
+$ **rails generate scaffold reservation start:date end:date
+  room_type:string guest_name1 guest_name2**
+  [...]
+$ **rails db:migrate**
+  [...]
+$ **rails server**
+  [...]
+----
+
+With this setup we get a very spartanic and totally unnormalized
+http://localhost:3000/reservations/new
+
+image::screenshots/chapter13/hotel_zimmer_basic_form.png[Hotel basic form,title="Hotel basic form"]
+
+That is not userfriendly. The aim is to display the following page when
+you go to http://localhost:3000/reservations/new:
+
+image::screenshots/chapter13/hotel_einzelzimmer_form.png[Hotel single room form,title="Hotel single room form"]
+
+As soon as the user selects a double room instead of a single, we want a
+second name field to appear:
+
+image::screenshots/chapter13/hotel_doppelzimmer_form.png[Hotel double room form,title="Hotel double room form"]
+
+So I am changing two things in the
+`app/views/reservations/_form.html.erb`:
+
+* Set the `room_type` via a dropdown box.
+
+[source,erb]
+.app/views/reservations/_form.html.erb
+----
+[...]
+<div class="field">
+  <%= f.select :room_type, options_for_select(['single room', 'double room']) %>
+</div>
+[...]
+----
+
+* In the div element around the second name, I set an ID `second_name'.
+
+[source,erb]
+.app/views/reservations/_form.html.erb
+----
+[...]
+<div class="field" id='second_name'>
+  <%= f.label :guest_name2 %>
+  <%= f.text_field :guest_name2 %>
+</div>
+[...]
+----
+
+In the file `app/assets/javascripts/reservations.js.coffee` I define the
+CoffeeScript code that toggles the element with the ID `second_name`
+between visible (`show`) or invisible (`hide`) depending on the content
+of `reservation_room_type`:
+
+[source,coffeescript]
+.app/assets/javascripts/reservations.js.coffee
+----
+ready = ->
+  $('#second_name').hide()
+  $('#reservation_room_type').change ->
+    room_type = $('#reservation_room_type :selected').text()
+    if room_type == 'single room'
+      $('#second_name').hide()
+    else
+      $('#second_name').show()
+
+$(document).ready(ready)
+$(document).on('page:load', ready)
+----
+
+NOTE: In the real world, you would surely integrate the guest names
+      in a 1:n `has_many` association, but in this example we just
+      want to demonstrate how you can change the content of a form
+      via JavaScript.
