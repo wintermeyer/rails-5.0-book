@@ -10,7 +10,7 @@ v5.0, 2016-02-05
 :icons: font
 :toc:
 :source-highlighter: pygments
-:pdf-page-size: 8in x 10in
+:pdf-page-size: 9in x 13.5in
 ifndef::ebook-format[:leveloffset: 1]
 
 include::preface.adoc[]
