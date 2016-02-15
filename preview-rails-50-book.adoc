@@ -14,8 +14,9 @@ v5.0, 2016-02-07
 ifndef::ebook-format[:leveloffset: 1]
 
 [[preface]]
-This webpage is a preview for my "Ruby on Rails 5.0 for Autodidacts"
-book. It contains some sample chapters of it.
+This webpage is a preview for my http://amzn.to/1QCyq33[Ruby on Rails 5.0 for Autodidacts] book. The preview consists of 10 sample chapters plus the "Ruby on Rails Install How-to" appendix. http://amzn.to/1QCyq33[The whole book is available on Amazon.]
+
+image::amazon-cover-preview.jpg[Book Cover, 193, 250, link="http://amzn.to/1QCyq33"]
 
 include::chapter-first-steps-with-rails.adoc[]
 
@@ -26,8 +27,6 @@ include::chapter-scaffolding.adoc[]
 include::chapter-routing.adoc[]
 
 include::chapter-forms.adoc[]
-
-include::chapter-cookies-and-sessions.adoc[]
 
 include::chapter-active_job.adoc[]
 
