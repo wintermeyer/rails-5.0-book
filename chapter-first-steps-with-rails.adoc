@@ -490,7 +490,7 @@ addition to the HTML elements:
 * <% … %>
 +
 Executes the Ruby code it contains, but does not output anything (unless
-you explicitly use something like `print` or `puts`).
+you explicitly use something like `print` or `puts` in special ways).
 * <%= … %>
 +
 Executes the Ruby code it contains and outputs the result as a String.
