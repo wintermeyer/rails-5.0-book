@@ -464,9 +464,9 @@ $ **irb**
 ----
 
 Yes, both the number 1 and the result of 1 + 1 is a `Fixnum`. What
-happened? Rails is so intelligent that it automatically calls all
-objects in a view (that is the file `test.html.erb`) that are not
-already a string via the method `.to_s`, which always converts the
+happened? Rails is intelligent enough to automatically call all
+objects in a view (that is the file `test.html.erb`) that aren't
+already strings via the method `.to_s`, which always converts the
 content of the object to a string. Once more, a brief
 trip to `irb`:
 
