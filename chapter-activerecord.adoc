@@ -212,8 +212,8 @@ To generate a _model_, you can use the following field types:
   See also http://en.wikipedia.org/wiki/String_(computer_science)
 
 | `text`
-|  Also a string - but considerably bigger. By default, up to 2^16^ (=
-   1.  characters can be saved here.
+|  Also a string - but considerably bigger. By default, up to 2^16 -1 (=
+   65535)  characters can be saved here.
 
 | `time`
 | A time.
