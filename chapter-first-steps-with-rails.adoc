@@ -224,10 +224,7 @@ useful for pages that never change and that you want to work even if
 Rails is not currently working, for example because of an update. In a
 production environment, you would usually put a classic web server such
 as http://www.apache.org/[Apache] or https://www.nginx.com/[Nginx] in front of the Rails server. Which is capable of
-autonomously delivering static files from the `public` directory. You'll
-learn how to set up a production webserver in
-xref:web-server-in-production-mode["Web Server in
-Production Mode"].
+autonomously delivering static files from the `public` directory.
 
 With `Ctrl+C` you can stop the Rails server.
 
