@@ -409,7 +409,7 @@ IMPORTANT: A static file in the directory `public` always has higher
 === Programming in an erb File
 
 `Erb` pages can contain Ruby code. You can use it to program and give
-these page dynamic content.
+these pages dynamic content.
 
 Let's start with something very simple: adding 1 and 1. First we try out
 the code in `irb`:
