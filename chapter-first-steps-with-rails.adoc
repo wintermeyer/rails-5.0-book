@@ -1177,7 +1177,7 @@ the software in another place. Nothing more, nothing less.
 
 *This agreement has the enormous advantage that once you are used to
 this concept, you know exactly where you can find or need to integrate a
-certain functionaity in a Rails project.*
+certain functionality in a Rails project.*
 
 [[model]]
 === Model
