@@ -269,7 +269,7 @@ Hello World!
 $
 ----
 
-So we want to output the string “Hello World!” three times in a row. As
+So we want to output the string “Hello World!” three times in separate rows. As
 this makes our daily work routine much longer, we are now going to
 define a method (with the meaningless name `three\_times`), with which
 this can all be done in one go.

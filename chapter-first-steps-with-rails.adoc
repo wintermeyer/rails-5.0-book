@@ -224,10 +224,7 @@ useful for pages that never change and that you want to work even if
 Rails is not currently working, for example because of an update. In a
 production environment, you would usually put a classic web server such
 as http://www.apache.org/[Apache] or https://www.nginx.com/[Nginx] in front of the Rails server. Which is capable of
-autonomously delivering static files from the `public` directory. You'll
-learn how to set up a production webserver in
-xref:web-server-in-production-mode["Web Server in
-Production Mode"].
+autonomously delivering static files from the `public` directory.
 
 With `Ctrl+C` you can stop the Rails server.
 
@@ -412,7 +409,7 @@ IMPORTANT: A static file in the directory `public` always has higher
 === Programming in an erb File
 
 `Erb` pages can contain Ruby code. You can use it to program and give
-these page dynamic content.
+these pages dynamic content.
 
 Let's start with something very simple: adding 1 and 1. First we try out
 the code in `irb`:
@@ -467,9 +464,9 @@ $ **irb**
 ----
 
 Yes, both the number 1 and the result of 1 + 1 is a `Fixnum`. What
-happened? Rails is so intelligent that it automatically calls all
-objects in a view (that is the file `test.html.erb`) that are not
-already a string via the method `.to_s`, which always converts the
+happened? Rails is intelligent enough to automatically call all
+objects in a view (that is the file `test.html.erb`) that aren't
+already strings via the method `.to_s`, which always converts the
 content of the object to a string. Once more, a brief
 trip to `irb`:
 
@@ -493,7 +490,7 @@ addition to the HTML elements:
 * <% … %>
 +
 Executes the Ruby code it contains, but does not output anything (unless
-you explicitly use something like `print` or `puts`).
+you explicitly use something like `print` or `puts` in special ways).
 * <%= … %>
 +
 Executes the Ruby code it contains and outputs the result as a String.
@@ -1180,7 +1177,7 @@ the software in another place. Nothing more, nothing less.
 
 *This agreement has the enormous advantage that once you are used to
 this concept, you know exactly where you can find or need to integrate a
-certain functionaity in a Rails project.*
+certain functionality in a Rails project.*
 
 [[model]]
 === Model

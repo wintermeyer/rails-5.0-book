@@ -366,9 +366,7 @@ $ **rails db:migrate**
 == 20151218150127 CreateProducts: migrated (0.0024s) ==========================
 ----
 
-Let’s create the first six products in the `db/seeds.rb`. I am not quite
-sure about Walter Scheel, but after all, this book is all about Rails,
-not German post-war history.
+Let’s create the first six products in the `db/seeds.rb`.
 
 [source,ruby]
 ----
